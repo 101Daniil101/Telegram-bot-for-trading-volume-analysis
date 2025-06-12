@@ -46,7 +46,7 @@ def send_request_processing_params(endpoint, method, params):
 
     url_full = URL + endpoint
 
-    response = utils.send_request(url_full, method, params, headers)
+    response = utils.send_request(url_full, method, params, headers = {})
 
     return response
 
@@ -121,7 +121,6 @@ def get_trading_candles(category: str, symbol: str,
 
 
 def get_available_trading_pairs():
-    from utils_for_api_bybit import send_request_processing_params
     endpoint = '/v5/market/instruments-info'
     trading_pairs = dict()
 

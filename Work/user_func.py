@@ -2,6 +2,7 @@ import pandas as pd
 
 import utils_for_api_bybit as bybit
 import utils_for_api_okx as okx
+import utils_for_api_binance as binance
 import candle_analysis as analysis
 
 
@@ -36,23 +37,32 @@ def convert_interval(timeframe: str):
             'Month': '1M'
     }
 
-    result = {"bybit": mapping_bybit[timeframe],"okx": mapping_okx[timeframe]}
-    
-    return result
-
-
-def convert_trading_pair(trading_pair: str):
-    result = {"bybit": trading_pair.replace('/', ''), "okx": trading_pair.replace('/', '-')}
-
-    return result
-
-
-def convert_type_of_trade(type_of_trade: str, trading_pair: str = ''):
-    mapping_bybit = {
-        'SPOT': 'spot',
-        'FUTURES': 'linear',
-        'PERPETUAL FUTURES': 'linear'
+    mapping_binance = {
+            '1': '1m',
+            '3': '3m',
+            '5': '5m',
+            '15': '15m',
+            '30': '30m',
+            '60': '1h',
+            '120': '2h',
+            '240': '4h',
+            '360': '6h',
+            'Day': '1d',
+            'Week': '1w',
+            'Month': '1M'
     }
+
+    result = {"bybit": mapping_bybit[timeframe], "okx": mapping_okx[timeframe],
+              "binance": mapping_binance[timeframe]}
+
+    return result
+
+
+def convert_trading_pair(trading_pair: str, exchange: str, type_of_trade: str):
+    result = {"bybit": trading_pair.replace('/', ''), "okx": trading_pair.replace('/', '-'),
+              "binance": trading_pair.replace('/', '')}
+
+    trading_pair = result[exchange]
 
     months_dict = {
         'JAN': '01',
@@ -69,19 +79,47 @@ def convert_type_of_trade(type_of_trade: str, trading_pair: str = ''):
         'DEC': '12'
     }
 
-    trading_pair_okx = trading_pair
-
-    if type_of_trade == 'PERPETUAL FUTURES' and trading_pair != '':
-        trading_pair_okx = trading_pair + "-SWAP"
-
-    if type_of_trade == 'FUTURES' and trading_pair != '':
-        day = trading_pair[len(trading_pair)-7:len(trading_pair_okx)-5]
-        month = trading_pair[len(trading_pair)-5:len(trading_pair_okx)-2]
+    if type_of_trade == "FUTURES":
+        day = trading_pair[len(trading_pair)-7:len(trading_pair)-5]
+        month = trading_pair[len(trading_pair)-5:len(trading_pair)-2]
         year = trading_pair[len(trading_pair)-2:]
 
-        trading_pair_okx = trading_pair[:len(trading_pair_okx)-7] + year + months_dict[month] + day
+        if exchange == 'binance':
+            trading_pair = trading_pair[:len(trading_pair)-7] + day + months_dict[month] + year
+            result['binance'] = trading_pair
+        elif exchange == 'okx':
+            trading_pair = trading_pair[:len(trading_pair)-7] + year + months_dict[month] + day
+            result['okx'] = trading_pair
 
-    result = {"bybit": mapping_bybit[type_of_trade], "okx": trading_pair_okx}
+    return result
+
+
+def convert_type_of_trade(type_of_trade: str, trading_pair: str = '',
+                          exchange: str = ''):
+
+    result = dict()
+
+    mapping_bybit = {
+        'SPOT': 'spot',
+        'FUTURES': 'linear',
+        'PERPETUAL FUTURES': 'linear'
+    }
+
+    mapping_binance = {
+        'SPOT': 'SPOT',
+        'FUTURES': 'FUTURES',
+        'PERPETUAL FUTURES': 'FUTURES_PERP'
+    }
+
+    result['binance'] = mapping_binance[type_of_trade]
+
+    trading_pair_okx = trading_pair
+
+    if type_of_trade == 'PERPETUAL FUTURES' and trading_pair != '' and exchange == 'okx':  # Это тоже посути в convert_trading_pair
+        trading_pair_okx = trading_pair + "-SWAP"
+
+    result['bybit'] = mapping_bybit[type_of_trade]
+    result['okx'] = trading_pair_okx
 
     return result
 
@@ -92,10 +130,10 @@ def fix_some_API_error(df: pd.DataFrame, type_of_trade: str):
 
     if (type_of_trade == "PERPETUAL FUTURES"):
         for index in df.index:
-            if df['volume', index] > 100000:
-                df['volume', index] = df['volume', index] / 100
+            if df.loc[index, 'volume'] > 100000:
+                df.loc[index, 'volume'] = df.loc[index, 'volume'] / 100
             else:
-                df['volume', index] = df['volume', index] * 10
+                df.loc[index, 'volume'] = df.loc[index, 'volume'] * 10
 
     return df
 
@@ -128,7 +166,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def analys_based_on_trading_pair_timeframe_numbers_candles(trading_pair: str, type_of_trade: str, timeframe: str, numbers_of_candles: str):
     """
         Входящие параметры:
-            trading_pair: str - торговая пара вида BTC/USDT. ОБЯЗАТЕЛЬНО ТАКОГО, однако если это срочные фьючерсы, то там добавляются чиселки(это тоже прошареный пользователь вводит)
+            trading_pair: str - торговая пара вида BTC/USDT. ОБЯЗАТЕЛЬНО ТАКОГО
             Монету срочных фьчерсов обязательно в виде: <монета>/<монета>-ДД.<первые три заглавные буквы месяца на английском языке>.ГГ 
             kind_of_trade: str - вид торговли. Принимает следующие возможные варианты: SPOT, FUTURES, PERPETUAL FUTURES
             timeframe: str - таймфрейм (сколько длится одна свеча). Принимает следующие возможные варианты (в виде строки): 
@@ -142,14 +180,20 @@ def analys_based_on_trading_pair_timeframe_numbers_candles(trading_pair: str, ty
 
     timeframe_bybit = convert_interval(timeframe)["bybit"]
     timeframe_okx = convert_interval(timeframe)["okx"]
+    timeframe_binance = convert_interval(timeframe)["binance"]
+    print(timeframe_binance)
 
-    trading_pair_bybit = convert_trading_pair(trading_pair)['bybit']
-    trading_pair_okx = convert_trading_pair(trading_pair)['okx']
+    trading_pair_bybit = convert_trading_pair(trading_pair, 'bybit', type_of_trade)['bybit']
+    trading_pair_okx = convert_trading_pair(trading_pair, 'okx', type_of_trade)['okx']
+    trading_pair_binance = convert_trading_pair(trading_pair, 'binance', type_of_trade)['binance']
+    print(trading_pair_binance)
 
     type_of_trade_bybit = convert_type_of_trade(type_of_trade)["bybit"]
     trading_pair_okx = convert_type_of_trade(
         type_of_trade, trading_pair_okx
         )["okx"]
+    type_of_trade_binance = convert_type_of_trade(type_of_trade)["binance"]
+    print(type_of_trade_binance)
 
     list_of_candles_bybit = bybit.get_trading_candles(
         type_of_trade_bybit, trading_pair_bybit,
@@ -161,22 +205,33 @@ def analys_based_on_trading_pair_timeframe_numbers_candles(trading_pair: str, ty
         limit=numbers_of_candles
     )
 
+    list_of_candles_binance = binance.get_trading_candles(
+        type_of_trade_binance, trading_pair_binance, timeframe_binance,
+        limit=int(numbers_of_candles)
+    )
+
     df_bybit = candles_to_df(list_of_candles_bybit, 'Bybit')
     df_okx = candles_to_df(list_of_candles_okx, 'OKX')
+    df_binance = candles_to_df(list_of_candles_binance, 'Binance')
+
+    print(df_okx)
 
     df_okx = fix_some_API_error(df_okx, type_of_trade)
 
     df_bybit = analysis.calculate_obv(df_bybit)
     df_okx = analysis.calculate_obv(df_okx)
+    df_binance = analysis.calculate_obv(df_binance)
 
     df_bybit = analysis.calculate_vwap(df_bybit)
     df_okx = analysis.calculate_vwap(df_okx)
+    df_binance = analysis.calculate_vwap(df_binance)
 
     # df_bybit = analysis.calculate_volume_profile(df_bybit)
     # df_okx = analysis.calculate_volume_profile(df_okx)
 
     df_bybit = analysis.calculate_cmf(df_bybit)
     df_okx = analysis.calculate_cmf(df_okx)
+    df_binance = analysis.calculate_cmf(df_binance)
 
     # df_bybit = analysis.calculate_vo(df_bybit)
     # df_okx = analysis.calculate_vo(df_okx)
@@ -184,20 +239,23 @@ def analys_based_on_trading_pair_timeframe_numbers_candles(trading_pair: str, ty
     # df_bybit = analysis.calculate_vrsi(df_bybit)
     # df_okx = analysis.calculate_vrsi(df_okx)
 
-    exchange_comparison = analysis.compare_exchanges(df_bybit, df_okx) 
+    # exchange_comparison = analysis.compare_exchanges(df_bybit, df_okx)  Добавь сюда обработку с бинансом
 
-    df_combined = pd.concat([df_bybit, df_okx])
+    df_combined = pd.concat([df_bybit, df_okx, df_binance])
     df_combined.sort_index(inplace=True)
+
+    # РАЗБИРАЙСЯ С PERPETUAL FUTURES
 
     print(df_bybit)
     print(df_okx)
+    print(df_binance)
+    print(df_combined)
 
-    print(exchange_comparison)  # правильно отработало на таймфрейме: 1, 3, 5, 15, 30, 60, 120, 240 - это все из-за разницы в представлении времени бирж
+    # print(exchange_comparison)  # правильно отработало на таймфрейме: 1, 3, 5, 15, 30, 60, 120, 240 - это все из-за разницы в представлении времени бирж
 
 
-analys_based_on_trading_pair_timeframe_numbers_candles("BTC/USDT-06JUN25", "FUTURES", "240", '4')
-print("\n---\n")
-analys_based_on_trading_pair_timeframe_numbers_candles("BTC/USDT-06JUN25", "FUTURES", "360", '4')
+analys_based_on_trading_pair_timeframe_numbers_candles("BTC/USDT_25SEP26", "FUTURES", "15", '4')
+
 
 # Добавь обработку ошибок
 

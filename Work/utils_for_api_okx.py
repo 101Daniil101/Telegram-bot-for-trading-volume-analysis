@@ -53,14 +53,14 @@ def send_request_processing_params(endpoint, method, params):
 
     url_full = URL + endpoint
 
-    response = utils.send_request(url_full, method, params, headers)
+    response = utils.send_request(url_full, method, params, headers = {})
 
     return response
 
 
 def get_trading_candles(instId: str, bar: str,
-                               after: str = None,
-                               before: str = None, limit: str = None):
+                               after: str=None,
+                               before: str=None, limit: str=None):
 
     global AVAILABLE_TRADING_PAIRS
     if AVAILABLE_TRADING_PAIRS is None:
