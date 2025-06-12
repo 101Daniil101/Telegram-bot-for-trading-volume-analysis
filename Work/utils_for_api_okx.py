@@ -6,6 +6,7 @@ from datetime import datetime
 from pprint import pprint
 
 import Library.utils as utils
+from logger import log_error, log_warning
 
 API_KEY = utils.get_api_keys_from_json("API_KEY_OKX")
 SECRET_KEY = utils.get_api_keys_from_json("API_SECRET_KEY_OKX")
@@ -68,20 +69,24 @@ def get_trading_candles(instId: str, bar: str,
 
     if ("SWAP" in instId):
         if (instId not in AVAILABLE_TRADING_PAIRS["SWAP"]):
-            print("Такой торговой пары SWAP не существует")
-            return
+            error_message = f"Торговой пары {instId} не существует"
+            log_error(error_message)
+            return None
     elif (instId.count("-") == 2):
         if (instId not in AVAILABLE_TRADING_PAIRS["FUTURES"]):
-            print("Такой торговой пары не существует")
-            return
+            error_message = f"Торговой пары {instId} не существует"
+            log_error(error_message)
+            return None
     else:
         if (instId not in AVAILABLE_TRADING_PAIRS["SPOT"]):
-            print("Такой торговой пары не существует")
-            return
+            error_message = f"Торговой пары {instId} не существует"
+            log_error(error_message)
+            return None
 
     if bar not in AVAILABLE_INTERVALS:
-        print("Такого интервала не существует")
-        return
+        error_message = f"Интервала {bar} не существует"
+        log_error(error_message)
+        return None
 
     endpoint = "/api/v5/market/candles"
     params = {
@@ -91,40 +96,59 @@ def get_trading_candles(instId: str, bar: str,
 
     if after is not None:
         if int(after) < 0 or int(after) < int(before):
-            print("")
-            return
+            error_message = (
+                f"Неккоректное значение времени октрытия последней свечи: "
+                f"{after}"
+            )
+            log_error(error_message)
+            return None
         params["after"] = str(after)
 
     if before is not None:
         if int(before) < 0 or int(before) > int(after):
-            print("")
-            return
+            error_message = (
+                f"Неккоректное значение времени октрытия первой свечи: "
+                f"{after}"
+            )
+            log_error(error_message)
+            return None
         params["before"] = str(before)
 
     if limit is not None:
         if int(limit) < 0:
-            print("")
-            return
+            error_message = (
+                f"Неккоректное значение количества свечей: "
+                f"{limit}"
+            )
+            log_error(error_message)
+            return None
         params["limit"] = limit
 
     response = send_request_processing_params(endpoint, "GET", params)
 
+    if "error" in response:
+        error_message = (
+            f"Network error in get_trading_candles:"
+            f"{response['message']}"
+        )
+        log_error(error_message)
+        # ВОТ СЮДА добавь код. ЕСЛИ это условие срабатывает, 
+        # то нахер выходим из функции аварийно и в тг-бота пишем мол, ошибка
+        # Ее содержание доступно по response["message"]
+        ...
+
     list_of_candles = list()
-    if response["code"] == '0' or "data" not in response:
-        for candle in response["data"]:
-            start_time = candle[0]
-            open_price = candle[1]
-            high_price = candle[2]
-            low_price = candle[3]
-            close_price = candle[4]
-            volume = candle[5]
-            list_of_candles.append(
-                (start_time, open_price, high_price,
-                 low_price, close_price, volume)
-                )
-    else:
-        print("")
-        return
+    for candle in response["data"]:
+        start_time = candle[0]
+        open_price = candle[1]
+        high_price = candle[2]
+        low_price = candle[3]
+        close_price = candle[4]
+        volume = candle[5]
+        list_of_candles.append(
+            (start_time, open_price, high_price,
+                low_price, close_price, volume)
+            )
     
     return list_of_candles
 
@@ -152,6 +176,3 @@ def get_available_trading_pairs():
         ]
 
     return trading_pairs
-
-
-
