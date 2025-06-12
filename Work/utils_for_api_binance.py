@@ -66,10 +66,6 @@ def get_available_trading_pairs():
 
 def get_trading_candles(type_of_trading: str, symbol: str, interval: str,
                         start: int=None, end: int=None, limit: int=None):
-    # Аккуратнее: эта функцию выдает в начале _ знзачения поздние, а потом - ранние
-
-    # Сделай валидацию
-
     endpoint = "/api/v3/klines"
     params = {
         "symbol": symbol,
@@ -79,10 +75,6 @@ def get_trading_candles(type_of_trading: str, symbol: str, interval: str,
     global AVAILABLE_TRADING_PAIRS
     if AVAILABLE_TRADING_PAIRS is None:
         AVAILABLE_TRADING_PAIRS = get_available_trading_pairs()
-
-    print("\n---\n")
-    print(AVAILABLE_TRADING_PAIRS['FUTURES'])
-    print("\n---\n")
 
     if symbol not in AVAILABLE_TRADING_PAIRS[type_of_trading]:
         print("Введена невозможная торговая пара!")
@@ -96,13 +88,13 @@ def get_trading_candles(type_of_trading: str, symbol: str, interval: str,
         if start < 0 or type(start) is not int:
             print()
             return
-        params["start"] = start
+        params["startTime"] = start
 
     if end is not None:
         if end < 0 or type(end) is not int:
             print()
             return
-        params["end"] = end
+        params["endTime"] = end
 
     if limit is not None:
         if limit < 0 or type(limit) is not int:
@@ -117,7 +109,7 @@ def get_trading_candles(type_of_trading: str, symbol: str, interval: str,
     if type_of_trading == "FUTURES" or type_of_trading == "FUTURES_PERP":
 
         # При FUTURES_PERP и FUTURES, если последние 4 буквы USDT или USDC то к url_full_usdt, иначе к другому
-        if symbol[-4:] == "USDT" or symbol[-4:] == "USDC":
+        if symbol[-4:] == "USDT" or symbol[-4:] == "USDC" or symbol[-11:-7] == "USDT" or symbol[-11:-87] == "USDC":
             url_full = URL_FUTURES_USDT + "/fapi/v1/klines"
         else:
             url_full = URL_FUTURES_COIN + "/dapi/v1/klines"
@@ -127,11 +119,11 @@ def get_trading_candles(type_of_trading: str, symbol: str, interval: str,
     else:
         print("Такого типа торговли не существует")
         return
+    
+    print("PARAMS", params)
 
     response = send_request_processing_params(endpoint, "GET",
                                               params, url_full)
-
-    print(url_full)
 
     list_of_candles = list()
     for candle in response:

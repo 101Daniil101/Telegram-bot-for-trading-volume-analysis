@@ -81,13 +81,13 @@ def get_trading_candles(category: str, symbol: str,
     }
 
     if start is not None:
-        if start < 0 or start < end:
+        if start < 0 or start > end:
             print("")
             return
         params["start"] = start
 
     if end is not None:
-        if end < 0 or end > start:
+        if end < 0 or end < start:
             print("")
             return
         params["end"] = end

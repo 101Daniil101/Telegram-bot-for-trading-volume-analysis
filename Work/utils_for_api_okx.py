@@ -93,13 +93,13 @@ def get_trading_candles(instId: str, bar: str,
         if int(after) < 0 or int(after) < int(before):
             print("")
             return
-        params["after"] = after
+        params["after"] = str(after)
 
     if before is not None:
         if int(before) < 0 or int(before) > int(after):
             print("")
             return
-        params["before"] = before
+        params["before"] = str(before)
 
     if limit is not None:
         if int(limit) < 0:
